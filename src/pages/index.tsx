@@ -75,9 +75,13 @@ export default function Home() {
       <div className={cn("flex flex-col gap-12 items-center")}>
         <span className={cn(
           "text-5xl font-bold",
-          output === phrase && "text-teal-500",
+          output && (output === phrase ? "text-teal-500" : "text-rose-500"),
           "transition-colors"
         )}>{phrase}</span>
+        <span className={cn(
+          "text-3xl font-bold h-8",
+          "transition-colors"
+        )}>{output}</span>
         <button
           className={cn(
             "appearance-none leading-none",

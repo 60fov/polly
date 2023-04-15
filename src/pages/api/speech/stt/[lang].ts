@@ -29,9 +29,9 @@ async function querySTT(data: Buffer, lang: SupportedLanguage) {
   return await openai.createTranscription(
     readable as unknown as File,
     "whisper-1",
-    // undefined, // prompt
-    // undefined, // response format
-    // undefined, // temperature
+    undefined, // prompt
+    undefined, // response format
+    undefined, // temperature
     "ko"
   )
 }
