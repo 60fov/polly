@@ -28,12 +28,7 @@ export default function Home() {
   }, [])
 
   useEffect(() => {
-    const goal = goals?.[0].korean
-    if (!goal) return
-    speak(goal, {
-      lang: 'ko-KR',
-      rate: 0.8
-    })
+    tts()
   }, [goals])
 
   // audio onmount
@@ -101,6 +96,15 @@ export default function Home() {
     console.log(`recorder state: ${recorder.state}`)
   }
 
+  const tts = () => {
+    const goal = goals?.[0].korean
+    if (!goal) return
+    speak(goal, {
+      lang: 'ko-KR',
+      rate: 0.7
+    })
+  }
+
   const goal = goals?.[0]
 
   const correct = (transcriptionState === "success" && transcription.replaceAll(".", "").replaceAll("?", "") === goal?.korean)
@@ -111,13 +115,13 @@ export default function Home() {
         <div className={cn(
           "flex flex-col gap-3 items-center"
         )}>
-          <span className={cn(
-            "text-5xl font-bold",
+          <span onClick={tts} className={cn(
+            "text-5xl font-bold p-2 hover:bg-neutral-300/50 rounded",
             transcriptionState === "success" && (correct ? "text-teal-500" : "text-rose-500"),
             "transition-colors"
           )}>{goal?.korean}</span>
           <span>{goal?.romanization}</span>
-          {/* <span>{goal.english}</span> */}
+          <span>{goal?.english}</span>
         </div>
         <div>
           <p className={cn(
