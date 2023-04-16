@@ -27,6 +27,15 @@ export default function Home() {
     setGoals(shuffle(data.korean))
   }, [])
 
+  useEffect(() => {
+    const goal = goals?.[0].korean
+    if (!goal) return
+    speak(goal, {
+      lang: 'ko-KR',
+      rate: 0.8
+    })
+  }, [goals])
+
   // audio onmount
   useEffect(() => {
     navigator.mediaDevices.getUserMedia({
@@ -70,7 +79,6 @@ export default function Home() {
     })
   }, [])
 
-
   const handleRecordButton: React.MouseEventHandler<HTMLButtonElement> = (e) => {
     if (!audioStreamRef.current) {
       console.warn("audioStreamRef is falsy")
@@ -94,6 +102,7 @@ export default function Home() {
   }
 
   const goal = goals?.[0]
+
   const correct = (transcriptionState === "success" && transcription.replaceAll(".", "").replaceAll("?", "") === goal?.korean)
 
   return (
@@ -268,6 +277,28 @@ const useAnimationFrame = (callback: (delta: number) => void) => {
       if (refFrame.current) cancelAnimationFrame(refFrame.current);
     }
   }, []);
+}
+
+
+
+export type SpeakOptions = {
+  lang?: 'ko-KR' | 'en-US' | undefined
+  pitch?: number
+  rate?: number
+  force?: boolean
+}
+
+const speak = (text: string, options?: SpeakOptions) => {
+  const synth = window.speechSynthesis
+  const utterance = new SpeechSynthesisUtterance()
+  if (options) {
+    if (options.lang) utterance.lang = options.lang
+    if (options.pitch) utterance.pitch = options.pitch
+    if (options.rate) utterance.rate = options.rate
+    if (options.force && (synth.speaking || synth.pending)) synth.cancel()
+  }
+  utterance.text = text
+  synth.speak(utterance)
 }
 
 const IconPlay = () => {
