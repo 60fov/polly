@@ -13,6 +13,7 @@ export default function handler(
   const { pwd } = req.body
 
   if (pwd === process.env.PASSWORD) {
+    // res.setHeader('Set-Cookie', `login=true`)
     setCookie(res, 'login', true, { path: '/', maxAge: 2592000 })
     res.redirect(302, "/")
   } else {
