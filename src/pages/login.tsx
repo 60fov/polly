@@ -1,4 +1,3 @@
-import { cookies } from "next/dist/client/components/headers"
 import { useRouter } from "next/router"
 import { useRef, useState } from "react"
 
