@@ -1,346 +1,240 @@
-import { RefObject, useEffect, useReducer, useRef, useState } from 'react'
-import { cn } from '~/util/fns'
+import { GetServerSideProps, GetServerSidePropsContext } from "next"
+import { NextRequest } from "next/server"
+import React, { useCallback, useEffect, useRef, useState } from "react"
+import MultiToggle from "~/components/Mutlitoggle"
+import Icon from "~/icons/Icons"
 import data from "~/util/data"
-import hark from "hark"
+import { cn, randomFrom, stringCompareDiff } from "~/util/fns"
+import { useSTT } from "~/util/hooks"
+import { LanguageISO6391, SupportedLanguage, getBCP47, getISO6391, isSupportedLanguage } from "~/util/langauge"
+
+import tts, { SpeakOptions, useTTS } from "~/util/tts"
+
+type Goal = {
+  text: string
+  english: string
+  romanization?: string
+}
 
 export default function Home() {
-  const audioStreamRef = useRef<MediaStream>()
-  const mediaRecorderRef = useRef<MediaRecorder>()
-  const audioRef = useRef<HTMLAudioElement>(null)
 
-  const [goals, setGoals] = useState<typeof data.korean[0][]>()
+  const [running, setRunning] = useState(false)
 
-  const [isRecording, setIsRecording] = useState(false)
+  const [goal, setGoal] = useState<Goal>()
   const [transcription, setTranscription] = useState("")
-  const [transcriptionState, setTranscriptionState] = useState<"success" | "error" | "loading" | "idle">("idle")
+  const [language, setLanguage] = useState<SupportedLanguage>("korean")
+  const refLang = useRef<SupportedLanguage>()
 
-  const { currentTime, duration, isPlaying } = useAudioState(audioRef)
+  refLang.current = language
 
-  const [realTimeCurrentTime, setRealTimeCurrentTime] = useState(0)
-  useAnimationFrame(() => {
-    if (!audioRef.current) return
-    setRealTimeCurrentTime(audioRef.current.currentTime)
+  const { play: ttsPlay, isPlaying: ttsIsPlaying } = useTTS({
+    lang: getBCP47(language),
+    rate: 0.7,
+    force: true,
   })
 
-  // init goals
-  useEffect(() => {
-    setGoals(shuffle(data.korean))
-  }, [])
+  const onTranscribe = useCallback(async (blob: Blob) => {
+    const lang = refLang.current || language
+    console.log("transcribing", getISO6391(lang), lang)
+    const text = await fetchTranscription(blob, getISO6391(lang))
+    console.log("transcribed", text)
+    return {
+      blob,
+      text
+    }
+  }, [language])
+
+  const onTranscribeEnd = useCallback((transcript: string) => {
+    setTranscription(transcript)
+    // const stringDiff = stringCompareDiff(goal?.text || "", transcript)
+    // ttsPlay(getAttemptResponse(stringDiff))
+  }, [
+    // goal?.text, ttsPlay
+  ])
+
+  const {
+    transcript,
+    isSpeaking,
+    isTranscribing,
+    isRecording,
+    startRecording,
+    stopRecording
+  } = useSTT({
+    onTranscribe,
+    onTranscribeEnd,
+  })
+
 
   useEffect(() => {
-    tts()
-  }, [goals])
-
-  // audio onmount
-  useEffect(() => {
-    navigator.mediaDevices.getUserMedia({
-      audio: true
-    }).then((stream) => {
-      audioStreamRef.current = stream
-
-      mediaRecorderRef.current = new MediaRecorder(stream, {
-        audioBitsPerSecond: 16_000,
-        mimeType: 'audio/webm',
-      })
-
-      mediaRecorderRef.current.ondataavailable = (e) => {
-        if (!audioRef.current) {
-          console.warn("audio ref falsy")
-          return
-        }
-        const audioURL = URL.createObjectURL(e.data)
-        audioRef.current.src = audioURL
-        e.data.arrayBuffer()
-          .then((buffer) => {
-            setTranscriptionState("loading")
-            return fetch('/api/speech/stt/ko', {
-              method: "POST",
-              body: buffer
-            })
-          })
-          .then((resp) => resp.json())
-          .then((json) => {
-            setTranscriptionState("success")
-            return setTranscription(json.text)
-          })
-          .catch((error) => {
-            setTranscriptionState("error")
-            console.log(error)
-          })
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !e.repeat && !isRecording) {
+        startRecording()
+        console.log('space down recording...')
       }
-      console.log("audio stream: captured!")
-    }).catch((err) => {
-      console.warn(err)
-    })
+    }
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        stopRecording()
+        console.log('space up recording stopped.')
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
   }, [])
 
-  const handleRecordButton: React.MouseEventHandler<HTMLButtonElement> = (e) => {
-    if (!audioStreamRef.current) {
-      console.warn("audioStreamRef is falsy")
-      return
-    }
-    if (!mediaRecorderRef.current) {
-      console.warn("mediaRecorder is falsy")
-      return
-    }
-
-    const recorder = mediaRecorderRef.current
-
-    if (isRecording) {
-      recorder.stop()
-      setIsRecording(false)
-    } else {
-      recorder.start()
-      setIsRecording(true)
-    }
-    console.log(`recorder state: ${recorder.state}`)
-  }
-
-  const tts = () => {
-    const goal = goals?.[0].korean
+  useEffect(() => {
     if (!goal) return
-    speak(goal, {
-      lang: 'ko-KR',
-      rate: 0.7
-    })
+    ttsPlay(goal.text)
+  }, [goal])
+
+  useEffect(() => {
+    if (transcription) {
+      const stringDiff = stringCompareDiff(goal?.text || "", transcript)
+      ttsPlay(getAttemptResponse(stringDiff))
+    }
+  }, [transcription])
+
+  const handleStart: React.MouseEventHandler = () => {
+    setRunning(true)
+    setGoal(randomFrom(data[language]))
   }
 
-  const goal = goals?.[0]
+  const handleSayAgain: React.MouseEventHandler = () => {
+    if (!goal) {
+      console.warn("no goal")
+      return
+    }
+    ttsPlay(goal.text)
+  }
 
-  const correct = (transcriptionState === "success" && transcription.replaceAll(".", "").replaceAll("?", "") === goal?.korean)
+  const handleContinue: React.MouseEventHandler = () => {
+    setGoal(randomFrom(data[language]))
+    setTranscription("")
+  }
+
+  const handleLanguageChange = (lang: SupportedLanguage) => {
+    console.log('setting language to', lang)
+    setLanguage(lang)
+    setGoal(randomFrom(data[lang]))
+    setTranscription("")
+  }
+
+  const getAttemptResponse = (diff: number) => {
+    let result: string
+    if (diff < 0.6) {
+      result = "not even close, try again";
+    } else if (diff < 0.75) {
+      result = "nice try, but you can do better.";
+    } else if (diff < 0.9) {
+      result = "you're so close!";
+    } else {
+      result = "perfect!";
+    }
+    return result
+  }
+
+
+  const stringDiff = stringCompareDiff(goal?.text || "", transcription)
+  const correctPronunciation = stringDiff > 0.9
+
+  if (!running) {
+    return (
+      <main className={"h-screen flex items-center justify-center"}>
+        <button
+          onClick={handleStart}
+          className={cn(
+            "p-2 leading-none border border-neutral-200 bg-neutral-100 rounded hover:bg-white active:bg-neutral-300"
+          )}>enter</button>
+      </main>
+    )
+  }
 
   return (
-    <main className={cn("h-screen flex flex-col gap-6 justify-center items-center")}>
-      <div className={cn("flex flex-col gap-6 items-center p-12 w-full max-w-xl rounded-xl bg-neutral-200/50")}>
+    <main className={cn(
+      "h-screen flex items-center justify-center",
+      "bg-white",
+      // "bg-teal-300 bg-rose-300"
+    )}>
+
+      <div className={cn(
+        "flex flex-col items-center gap-4",
+      )}>
+
         <div className={cn(
-          "flex flex-col gap-3 items-center"
+          "relative flex p-2 leading-none rounded  text-2xl font-semibold",
+          isRecording ? "bg-rose-300" : "bg-neutral-100",
         )}>
-          <span onClick={tts} className={cn(
-            "text-5xl font-bold p-2 hover:bg-neutral-300/50 rounded",
-            transcriptionState === "success" && (correct ? "text-teal-500" : "text-rose-500"),
-            "transition-colors"
-          )}>{goal?.korean}</span>
-          <span>{goal?.romanization}</span>
-          <span>{goal?.english}</span>
-        </div>
-        <div>
-          <p className={cn(
-            "text-neutral-800",
-            "p-2 rounded",
-            "bg-neutral-200"
-          )}>
+          <div className="absolute bottom-full mb-1 text-xs text-neutral-600 font-normal tracking-tight italic left-0 right-0 text-center">
             {
-              transcriptionState === "loading" ? (
-                "processing audio..."
-              ) : transcriptionState === 'success' ? (
-                transcription
-              ) : transcriptionState === 'error' ? (
-                'failed to transcribe audio'
-              ) : "..."
+              transcription && getAttemptResponse(stringDiff)
             }
-          </p>
-        </div>
-        <div className="flex h-10 bg-neutral-200 border border-neutral-300 rounded self-stretch overflow-hidden">
-          <button
-            onClick={() => {
-              const audio = audioRef.current
-              if (!audio) return
-              if (audio.paused) audio.play()
-              else audio.pause()
-            }}
-            className={cn(
-              "flex items-center justify-center p-2",
-              "hover:bg-neutral-100/50 active:bg-neutral-300",
-              "border-r border-r-neutral-300"
-            )}>{isPlaying ? <IconPause /> : <IconPlay />}</button>
-
-          <div className="flex items-center p-2 grow">
-            <ProgressBar value={!isRecording ? realTimeCurrentTime : undefined} max={duration} />
           </div>
-
-          <button
-            className={cn(
-              "flex items-center justify-center p-2",
-              "hover:bg-neutral-100/50 active:bg-neutral-300",
-              "border-l border-l-neutral-300",
-              isRecording ? "animate-pulse text-red-400" : "text-black"
-            )}
-            onClick={handleRecordButton}>
-            <IconMic />
-          </button>
+          {
+            transcription ?
+              <span className={cn(
+                stringDiff < 0.6 ? "text-red-400" :
+                  stringDiff < 0.75 ? "text-amber-400" :
+                    stringDiff < 0.9 ? "text-green-400" :
+                      "text-fuchsia-400"
+              )}>
+                {transcription}
+              </span>
+              :
+              <span className="opacity-50">
+                {isRecording ? "recording" :
+                  isTranscribing ? "transcribing" : "hold space to record your input"}
+              </span>
+          }
         </div>
-        <audio
-          ref={audioRef}
-        // controls
-        />
+
+        <div className="flex flex-col items-center">
+          <div className="relative flex items-center">
+            <span className="text-2xl font-semibold">{goal?.text}</span>
+            <div
+              onClick={handleSayAgain}
+              className={cn(
+                "cursor-pointer left-full absolute ml-2 hover:opacity-100",
+                ttsIsPlaying ? "text-red-500 opacity-100" : "opacity-25"
+              )}><Icon.Speaker className="w-4 h-4" /></div>
+          </div>
+          <span className="text-xl">{goal?.romanization}</span>
+          <span className="italic">{goal?.english}</span>
+        </div>
+
+        <div className="flex gap-2 items-center">
+          <button
+            onClick={handleContinue}
+            onKeyDown={(e) => { e.preventDefault() }}
+            onKeyUp={(e) => { e.preventDefault() }}
+            className={cn(
+              "p-2 leading-none border border-neutral-200 bg-neutral-100 rounded hover:bg-white active:bg-neutral-300"
+            )}>{correctPronunciation ? "continue" : "skip"}</button>
+        </div>
+
+        <MultiToggle.Base name="lang2" value={language} onValueChange={handleLanguageChange}>
+          <MultiToggle.Item value="korean">korean</MultiToggle.Item>
+          <MultiToggle.Item value="japanese">japanese</MultiToggle.Item>
+          <MultiToggle.Item value="spanish">spanish</MultiToggle.Item>
+        </MultiToggle.Base>
+
       </div>
-      <button
-        className={cn(
-          "p-2 leading-none rounded bg-neutral-200 border border-neutral-300",
-          correct && "bg-cyan-200 hover:bg-cyan-200/50 active:bg-cyan-400 border-cyan-300 transition-all"
-        )}
-        onClick={() => {
-          setGoals(goals?.slice(1))
-          setTranscription("")
-          setTranscriptionState("idle")
-        }}
-        disabled={!correct}>
-        continue
-      </button>
     </main>
   )
 }
 
-
-interface ProgressBarProps {
-  value?: number
-  max: number
-}
-
-const ProgressBar = (props: ProgressBarProps) => {
-  const {
-    value,
-    max
-  } = props
-
-  return (
-    <div
-      className={cn(
-        "w-full h-2 bg-neutral-400 rounded overflow-clip",
-      )}>
-      <div
-        className={cn(
-          "bg-black/50 h-full",
-          value === undefined && "animate-pulse"
-        )}
-        style={{ width: `${(value || max) / max * 100}%` }}>
-      </div>
-    </div>
-  )
-}
-
-const useAudioState = (ref: RefObject<HTMLAudioElement>) => {
-  const [currentTime, setCurrentTime] = useState(0)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [duration, setDuration] = useState(0)
-
-  useEffect(() => {
-    const audio = ref.current
-    if (!audio) return
-
-    const handleTimeUpdate = () => {
-      setCurrentTime(audio.currentTime)
-    }
-
-    const handlePlay = () => {
-      setIsPlaying(true)
-    }
-
-    const handlePause = () => {
-      setIsPlaying(false)
-    }
-
-    const handleDurationChange = (event: Event) => {
-      console.log('target duration', (event.currentTarget as HTMLAudioElement).duration)
-      console.log('audio duration', audio.duration)
-      setDuration(audio.duration)
-    }
-
-    audio.addEventListener('timeupdate', handleTimeUpdate)
-    audio.addEventListener('play', handlePlay)
-    audio.addEventListener('pause', handlePause)
-    audio.addEventListener('durationchange', handleDurationChange)
-
-    return () => {
-      audio.removeEventListener('timeupdate', handleTimeUpdate)
-      audio.removeEventListener('play', handlePlay)
-      audio.removeEventListener('pause', handlePause)
-      audio.removeEventListener('durationchange', handleDurationChange)
-
-    }
-  }, [ref])
-  return { currentTime, isPlaying, duration }
-}
-
-const useAnimationFrame = (callback: (delta: number) => void) => {
-  const refFrame = useRef<number>()
-  const refPrevTime = useRef<number>()
-
-  const animate: FrameRequestCallback = (time) => {
-    if (refPrevTime.current != undefined) {
-      const dt = time - refPrevTime.current
-      callback(dt)
-    }
-    refPrevTime.current = time
-    refFrame.current = requestAnimationFrame(animate)
-  }
-
-  useEffect(() => {
-    refFrame.current = requestAnimationFrame(animate);
-    return () => {
-      if (refFrame.current) cancelAnimationFrame(refFrame.current);
-    }
-  }, []);
-}
-
-
-
-export type SpeakOptions = {
-  lang?: 'ko-KR' | 'en-US' | undefined
-  pitch?: number
-  rate?: number
-  force?: boolean
-}
-
-const speak = (text: string, options?: SpeakOptions) => {
-  const synth = window.speechSynthesis
-  const utterance = new SpeechSynthesisUtterance()
-  if (options) {
-    if (options.lang) utterance.lang = options.lang
-    if (options.pitch) utterance.pitch = options.pitch
-    if (options.rate) utterance.rate = options.rate
-    if (options.force && (synth.speaking || synth.pending)) synth.cancel()
-  }
-  utterance.text = text
-  synth.speak(utterance)
-}
-
-const IconPlay = () => {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" />
-    </svg>
-  )
-}
-const IconPause = () => {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
-    </svg>
-  )
-}
-const IconMic = () => {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
-    </svg>
-  )
-}
-
-function shuffle<T>(array: Array<T>) {
-  let currentIndex = array.length, randomIndex;
-
-  // While there remain elements to shuffle.
-  while (currentIndex != 0) {
-
-    // Pick a remaining element.
-    randomIndex = Math.floor(Math.random() * currentIndex);
-    currentIndex--;
-
-    // And swap it with the current element.
-    [array[currentIndex], array[randomIndex]] = [
-      array[randomIndex], array[currentIndex]];
-  }
-
-  return array;
+async function fetchTranscription(blob: Blob, lang: LanguageISO6391) {
+  const buffer = await blob.arrayBuffer()
+  const response = await fetch(`/api/speech/stt/${lang}`, {
+    method: "POST",
+    body: buffer
+  })
+  const { text } = await response.json() as { text: string }
+  return text
 }

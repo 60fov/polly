@@ -5,6 +5,7 @@ import { Configuration, OpenAIApi } from "openai";
 import getRawBody from 'raw-body';
 import { Readable } from 'stream';
 import { z } from 'zod';
+import { LanguageISO6391 } from '~/util/langauge';
 
 type Data = {
   text: string
@@ -19,7 +20,7 @@ const configuration = new Configuration({
 
 const openai = new OpenAIApi(configuration);
 
-async function querySTT(data: Buffer, lang: SupportedLanguage) {
+async function querySTT(data: Buffer, lang: LanguageISO6391) {
   const readable = new Readable()
   readable._read = () => { } // noop'd (?)
   readable.push(data)
@@ -32,26 +33,24 @@ async function querySTT(data: Buffer, lang: SupportedLanguage) {
     undefined, // prompt
     undefined, // response format
     undefined, // temperature
-    "ko"
+    lang
   )
 }
-
-const SupportedLanguageList = ['en', 'ko', 'jp'] as const
-type SupportedLanguage = typeof SupportedLanguageList[number]
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<Data>
 ) {
-  const langParse = z.custom<SupportedLanguage>().safeParse(req.query)
+  const langParse = z.custom<LanguageISO6391>().safeParse(req.query.lang)
   if (!langParse.success) {
-    res.status(400).end('invalid language query param')
+    res.status(400).end(`invalid language query param`)
     return
   }
   const lang = langParse.data
   const bodyBuffer = await getRawBody(req)
 
   if (req.method === 'POST') {
+    console.log("lang", lang)
     const resp = await querySTT(bodyBuffer, lang)
     // console.log(resp)
     res.status(200).json({ text: resp.data.text })
