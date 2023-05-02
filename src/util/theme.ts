@@ -40,6 +40,7 @@ const prefersDarkTheme = () => window.matchMedia("(prefers-color-scheme: dark)")
 export function setTheme(theme: Theme, mode: ThemeMode) {
   const modeName = mode === 'system' ? (prefersDarkTheme() ? 'dark' : 'light') : mode
   const colors = themeMap[theme]
+  console.log(theme, mode, colors)
 
   document.documentElement.style.setProperty("--color-light", colors.light);
   document.documentElement.style.setProperty("--color-vibrant", colors.vibrant);
@@ -50,9 +51,9 @@ export function setTheme(theme: Theme, mode: ThemeMode) {
     document.documentElement.style.setProperty("--color-mid", colors.vibrant);
     document.documentElement.style.setProperty("--color-back", colors.dark);
   } else {
-    document.documentElement.style.setProperty("--color-front", colors.dark);
-    document.documentElement.style.setProperty("--color-mid", colors.vibrant);
-    document.documentElement.style.setProperty("--color-back", colors.light);
+    document.documentElement.style.setProperty("--color-front", colors.light);
+    document.documentElement.style.setProperty("--color-mid", colors.dark);
+    document.documentElement.style.setProperty("--color-back", colors.vibrant);
   }
 }
 

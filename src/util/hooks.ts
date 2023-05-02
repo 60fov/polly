@@ -88,8 +88,10 @@ interface useWhisperOptions {
   requestMicOnMount?: boolean
   transcribeOnStoppedSpeaking?: boolean
   timeSlice?: number
-  onTranscribe: (blob: Blob) => Promise<{ blob: Blob, text: string }>
-  onTranscribeEnd: (transcript: string) => void
+  onTranscribe: (blob: Blob) => Promise<{ blob?: Blob, text: string }>
+  onTranscribeEnd?: (transcript: string) => void
+  onSpeakingStart?: () => void
+  onSpeakingStop?: () => void
 }
 
 export function useSTT(options: useWhisperOptions) {
@@ -98,7 +100,9 @@ export function useSTT(options: useWhisperOptions) {
     transcribeOnStoppedSpeaking = false,
     timeSlice,
     onTranscribe,
-    onTranscribeEnd
+    onTranscribeEnd,
+    onSpeakingStart,
+    onSpeakingStop,
   } = options
 
   const [transcript, setTranscript] = useState("")
@@ -118,7 +122,7 @@ export function useSTT(options: useWhisperOptions) {
   const handleRecorderDataAvailable = async (e: BlobEvent) => {
     setIsTranscribing(true)
     const { text } = await onTranscribe(e.data)
-    onTranscribeEnd(text)
+    if (onTranscribeEnd) onTranscribeEnd(text)
     setIsTranscribing(false)
     setTranscript(text)
   }
@@ -208,10 +212,12 @@ export function useSTT(options: useWhisperOptions) {
 
   const handleSpeaking = () => {
     setIsSpeaking(true)
+    if (onSpeakingStart) onSpeakingStart()
   }
 
   const handleStoppedSpeaking = () => {
     setIsSpeaking(false)
+    if (onSpeakingStop) onSpeakingStop()
     if (transcribeOnStoppedSpeaking) {
       refMediaRecorder.current?.requestData()
     }
@@ -238,7 +244,7 @@ export function useSTT(options: useWhisperOptions) {
 
   useEffect(() => {
     // if (requestMicOnMount) {
-      initStreamAndRecorder()
+    initStreamAndRecorder()
     // }
   }, [])
 

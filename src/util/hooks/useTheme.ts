@@ -2,8 +2,9 @@ import { useEffect } from "react"
 import { useThemeStore } from "../stores/themeStore"
 import { setTheme } from "../theme"
 
-const useTheme = () => {
+export const useTheme = () => {
   const themeStore = useThemeStore()
+  console.log(themeStore)
 
   // handles system-theme changes
   useEffect(() => {
@@ -23,8 +24,9 @@ const useTheme = () => {
 
   // handles in app theme change
   useEffect(() => {
+    console.log('effect store', themeStore)
     setTheme(themeStore.theme, themeStore.mode)
-  }, [themeStore.theme])
+  }, [themeStore.theme, themeStore.mode])
 
   return [{mode: themeStore.mode, color: themeStore.theme}, themeStore.set] as const
 }
