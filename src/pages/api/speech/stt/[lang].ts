@@ -21,7 +21,7 @@ const configuration = new Configuration({
 const openai = new OpenAIApi(configuration);
 
 async function querySTT(data: Buffer, lang: LanguageISO6391) {
-  console.log("query stt", data, "lang:", lang)
+  // console.log("query stt", data, "lang:", lang)
   const readable = new Readable()
   readable._read = () => { } // noop'd (?)
   readable.push(data)
