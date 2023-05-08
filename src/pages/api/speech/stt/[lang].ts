@@ -21,6 +21,7 @@ const configuration = new Configuration({
 const openai = new OpenAIApi(configuration);
 
 async function querySTT(data: Buffer, lang: LanguageISO6391) {
+  console.log("query stt", data, "lang:", lang)
   const readable = new Readable()
   readable._read = () => { } // noop'd (?)
   readable.push(data)
@@ -52,7 +53,6 @@ export default async function handler(
   if (req.method === 'POST') {
     console.log("lang", lang)
     const resp = await querySTT(bodyBuffer, lang)
-    // console.log(resp)
     res.status(200).json({ text: resp.data.text })
   } else {
     res.setHeader('Allow', ['POST'])
