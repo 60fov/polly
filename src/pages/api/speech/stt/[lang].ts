@@ -26,7 +26,7 @@ async function querySTT(data: Buffer, lang: LanguageISO6391) {
   readable.push(data)
   readable.push(null)
   // @ts-ignore
-  readable.path = "audio.webm"
+  readable.path = "audio.webm" // lol
   return await openai.createTranscription(
     readable as unknown as File,
     "whisper-1",

@@ -51,8 +51,11 @@ function Transcription(props: TranscriptionProps) {
   const [attempts, setAttempts] = useState(0)
   const [goalList, setGoalList, refGoalList] = useStateRef<Goal[]>()
   const [similarity, setSimilarity] = useState(0)
-  
-  const goal = refGoalList.current?.at(0)
+
+  const refSimilarity = useRef(similarity)
+  refSimilarity.current = similarity
+
+  const goal = () => refGoalList.current?.at(0)
 
   useEffect(() => {
     setAttempts(0)
@@ -77,9 +80,9 @@ function Transcription(props: TranscriptionProps) {
     },
     onTranscribeEnd: (transcript: string) => {
       setAttempts(attempts + 1)
-      const sim = stringCompareF(transcript, goal?.text || "")
-      console.log('sim', sim, "\ntscrpt\n", transcript, "\n\ngoal\n", goal)
-      setSimilarity(sim => sim)
+      const sim = stringCompareF(transcript, goal()?.text || "")
+      console.log('transcript', transcript, "goal", goal()?.text, 'sim', sim)
+      setSimilarity(sim)
       if (sim === 1) {
         successTimeout.start()
       }
@@ -121,8 +124,8 @@ function Transcription(props: TranscriptionProps) {
       attempts,
       isTranscribing,
       isRecording,
-      goal,
-      similarity,
+      goal: goal(),
+      similarity: refSimilarity.current,
       nextGoal,
     }}>
       <div className="flex flex-col gap-16 items-center">
