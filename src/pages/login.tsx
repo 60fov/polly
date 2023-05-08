@@ -11,7 +11,7 @@ export default function Auth() {
         <input type="password" className="border-neutral-300 bg-neutral-200 rounded p-2" ref={refInput} placeholder="password" />
         <button onClick={async () => {
           setError(false)
-          console.log("click")
+          // console.log("click")
           return await fetch('/api/auth', {
             method: "POST",
             headers: {

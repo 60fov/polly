@@ -3,17 +3,19 @@ import data from "~/util/data"
 import { cn, createCtx, shuffle, stringCompareDiff as stringCompareF } from "~/util/fns"
 import { useSTT } from "~/util/hooks"
 import useEvent from "~/util/hooks/useEvent"
-import { LanguageISO6391, SupportedLanguage, getISO6391 } from "~/util/langauge"
+import { LanguageISO6391, SupportedLanguage, getBCP47, getISO6391 } from "~/util/langauge"
 import Text from './Text'
 import useTimeout from "~/util/hooks/useTimeout"
 import useStateRef from "~/util/hooks/useStateRef"
+import tts from "~/util/tts"
+import Button from "./Button"
+import Icons from "~/icons/Icons"
 
 type Goal = {
   text: string
   english: string
   romanization?: string
 }
-
 
 
 interface TranscriptionContextInterface {
@@ -61,10 +63,21 @@ function Transcription(props: TranscriptionProps) {
     setAttempts(0)
   }, [])
 
+  useEffect(() => {
+    const text = goal()?.text
+    if (text) {
+      tts.speak(text, {
+        rate: 0.8,
+        lang: getBCP47(language),
+        force: true
+      })
+    }
+  }, [goalList])
+
   const successTimeout = useTimeout(() => {
-    console.log("timeout")
+    console.log("next goal")
     nextGoal()
-  }, 1000)
+  }, 2000)
 
   const {
     transcript,
@@ -81,8 +94,13 @@ function Transcription(props: TranscriptionProps) {
     onTranscribeEnd: (transcript: string) => {
       setAttempts(attempts + 1)
       const sim = stringCompareF(transcript, goal()?.text || "")
-      console.log('transcript', transcript, "goal", goal()?.text, 'sim', sim)
+      // console.log('transcript', transcript, "goal", goal()?.text, 'sim', sim)
       setSimilarity(sim)
+      tts.speak(feedback(sim), {
+        lang: getBCP47(language),
+        force: true,
+        rate: 0.9
+      })
       if (sim === 1) {
         successTimeout.start()
       }
@@ -90,10 +108,11 @@ function Transcription(props: TranscriptionProps) {
   })
 
   useEvent('keydown', (e) => {
-    if (attempts === 0) {
+    if (attempts === 0 || similarity < 1) {
       const canStartRecording = !isRecording && !isTranscribing
       if (canStartRecording && e.code === 'Space') {
         startRecording()
+        setSimilarity(0)
       }
     }
   })
@@ -109,10 +128,14 @@ function Transcription(props: TranscriptionProps) {
   }, [language])
 
   const nextGoal = () => {
-    if (goalList) {
-      setGoalList([...goalList.slice(1)])
-      setAttempts(0)
+    const list = refGoalList.current
+    if (!list || list.length <= 1) {
+      setGoalList(shuffle(data[language]))
+    } else {
+      setGoalList([...list.slice(1)])
     }
+    setAttempts(0)
+    setSimilarity(0)
   }
 
   return (
@@ -130,6 +153,12 @@ function Transcription(props: TranscriptionProps) {
     }}>
       <div className="flex flex-col gap-16 items-center">
         {children}
+        {
+          attempts > 0 && refSimilarity.current !== 1 &&
+          <button onClick={nextGoal} className="absolute bottom-12 right-12 group">
+            <Text size="sm" className="leading-none flex items-center gap-2 group-hover:translate-x-[1px] transition-all">skip <Icons.Forward /> </Text>
+          </button>
+        }
       </div>
     </TranscriptionProvider>
   )
@@ -161,31 +190,33 @@ function Input(props: TranscriptionInputProps) {
       transcript
   }
 
-  function feedback() {
-    if (similarity === undefined) return
-    if (similarity < 0.25) return "Not even close."
-    if (similarity < 0.5) return "You can do better..."
-    if (similarity < 0.75) return "Nice try."
-    if (similarity < 0.9) return "Great job!"
-    return "Perfect!!"
-  }
+  const showTryAgain = !isRecording && !isTranscribing && !!(attempts > 0 && similarity !== undefined && similarity < 1)
+  // console.log("a", attempts, "s", similarity, "again", showTryAgain)
 
   return (
     <div className="relative flex justify-center">
       {
-        attempts !== 0 &&
+        attempts !== 0 && similarity !== undefined &&
         <div className="absolute bg-dark rounded-full leading-none px-8 py-1 bottom-full mb-8">
           <Text size="sm" className="text-light italic whitespace-nowrap">
-            {feedback()}
+            {feedback(similarity)}
           </Text>
         </div>
       }
-      <Text size={"lg"} className={cn(
-        "font-semibold opacity-50",
-        showTranscript && "opacity-100"
-      )}>
-        {transcription()}
-      </Text>
+      <div className="relative flex justify-center">
+        <Text size={"lg"} className={cn(
+          "font-semibold opacity-50",
+          showTranscript && "opacity-100"
+        )}>
+          {transcription()}
+        </Text>
+        {
+          showTryAgain &&
+          <div className="absolute top-full mt-2 opacity-70 leading-none whitespace-nowrap">
+            hold space to record again.
+          </div>
+        }
+      </div>
     </div>
   )
 }
@@ -224,4 +255,13 @@ async function fetchTranscription(blob: Blob, lang: LanguageISO6391) {
   })
   const { text } = await response.json() as { text: string }
   return text
+}
+
+
+function feedback(sim: number) {
+  if (sim < 0.25) return "Not even close."
+  if (sim < 0.5) return "You can do better..."
+  if (sim < 0.75) return "Nice try."
+  if (sim < 0.9) return "Great job!"
+  return "Perfect!!"
 }

@@ -70,7 +70,7 @@ function ModalPortal(props: ModalPortalProps) {
     <Portal>{
       open ?
         <div className="absolute inset-0 flex items-center justify-center p-6">
-          <div ref={refMenuElement} className={"relative max-w-xl w-full rounded-3xl p-6 bg-dark/75 backdrop-blur-sm"}>
+          <div ref={refMenuElement} className={"relative max-w-xl rounded-3xl p-6 bg-dark/75 backdrop-blur-sm"}>
             {children}
           </div>
         </div>

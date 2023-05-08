@@ -1,5 +1,10 @@
 const korean = [
   {
+    "text": "어떻게 지내세요?",
+    "romanization": "eotteohge jinaeseyo?",
+    "english": "how are you doing?"
+  },
+  {
     "text": "안녕하세요",
     "romanization": "annyeonghaseyo",
     "english": "hello"

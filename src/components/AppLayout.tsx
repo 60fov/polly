@@ -4,12 +4,18 @@ import Icon, { IconContextProvider } from "~/icons/Icons"
 import Modal from "./Modal"
 import Text from "./Text"
 import { cn } from "~/util/fns"
+import { useSettingsStore } from "~/util/stores/settingsStore"
+import Select from "./Select"
+import { isSupportedLanguage } from "~/util/langauge"
 
 interface LayoutProps {
   children?: ReactNode
 }
 
 export default function AppLayout({ children }: LayoutProps) {
+
+  const { language, setLanguage } = useSettingsStore()
+
   return (
     <>
       <IconContextProvider value={{ size: 18 }}>
@@ -25,7 +31,8 @@ export default function AppLayout({ children }: LayoutProps) {
                     htmlFor="languageSelect">
                     language
                   </Text>
-                  <select
+                  {/* <select
+                    onChange={(e) => setLanguage(e.value)}
                     id="languageSelect"
                     className={cn(
                       "appearance-none outline-none",
@@ -36,42 +43,19 @@ export default function AppLayout({ children }: LayoutProps) {
                     <option>korean</option>
                     <option>japanese</option>
                     <option>english</option>
-                  </select>
+                  </select> */}
+                  <Select.Base
+                    name="language"
+                    value={language}
+                    onValueChange={(nv) => {
+                      console.log(nv, isSupportedLanguage(nv))
+                      if (isSupportedLanguage(nv)) setLanguage(nv)
+                    }}>
+                    <Select.Option value="korean">Korean</Select.Option>
+                    <Select.Option value="japanese">Japanese</Select.Option>
+                    <Select.Option value="spanish">Spanish</Select.Option>
+                  </Select.Base>
                 </div>
-
-                <div>
-                  <div className="flex gap-4">
-                      <input type="checkbox" />
-                      <span className="grow">{"hello"}</span> 
-                      <span className="grow">{"안녕하세요"}</span>
-                  </div>
-                  <div className="flex gap-4">
-                      <input type="checkbox" />
-                      <span className="grow">{"hello"}</span> 
-                      <span className="grow">{"안녕하세요"}</span>
-                  </div>
-                  <div className="flex gap-4">
-                      <input type="checkbox" />
-                      <span className="grow">{"hello"}</span> 
-                      <span className="grow">{"안녕하세요"}</span>
-                  </div>
-                  <div className="flex gap-4">
-                      <input type="checkbox" />
-                      <span className="grow">{"hello"}</span> 
-                      <span className="grow">{"안녕하세요"}</span>
-                  </div>
-                  <div className="flex gap-4">
-                      <input type="checkbox" />
-                      <span className="grow">{"hello"}</span> 
-                      <span className="grow">{"안녕하세요"}</span>
-                  </div>
-                  <div className="flex gap-4">
-                      <input type="checkbox" />
-                      <span className="grow">{"hello"}</span> 
-                      <span className="grow">{"안녕하세요"}</span>
-                  </div>
-                </div>
-
               </div>
             </Modal.Portal>
           </Modal>
